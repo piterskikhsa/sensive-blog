@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django.urls import reverse
 from django.contrib.auth.models import User
 
@@ -7,18 +7,29 @@ from django.contrib.auth.models import User
 class PostQuerySet(models.QuerySet):
 
     def year(self, year):
-        posts_at_year = self.filter(published_at__year=year).order_by('published_at')
+        posts_at_year = self.filter(published_at__year=year)\
+                            .order_by('published_at')
         return posts_at_year
 
     def popular(self):
-        return self.annotate(likes_count=Count('likes')).order_by('-likes_count')
+        return self.annotate(likes_count=Count('likes'))\
+                   .order_by('-likes_count')
+
+    def prefetch_tags(self):
+        return self.prefetch_related(
+            Prefetch(
+                'tags',
+                queryset=Tag.objects.annotate(posts_count=Count('posts'))
+            )
+        )
 
     def fetch_with_comments_count(self):
         most_popular_posts = list(self)
-        most_popular_posts_ids = [post.id for post in most_popular_posts]
-        posts_with_comments = Post.objects.filter(id__in=most_popular_posts_ids).annotate(comments_count=Count('comments'))
-        ids_and_comments = posts_with_comments.values_list('id', 'comments_count')
-        count_for_id = dict(ids_and_comments)
+        popular_posts_ids = [post.id for post in most_popular_posts]
+        posts_with_comments = Post.objects.filter(id__in=popular_posts_ids)\
+                                  .annotate(comments_count=Count('comments'))
+        post_comments = posts_with_comments.values_list('id', 'comments_count')
+        count_for_id = dict(post_comments)
         for post in most_popular_posts:
             post.comments_count = count_for_id[post.id]
         return most_popular_posts
@@ -27,7 +38,8 @@ class PostQuerySet(models.QuerySet):
 class TagQuerySet(models.QuerySet):
 
     def popular(self):
-        return self.annotate(posts_count=Count('posts')).order_by('-posts_count')
+        return self.annotate(posts_count=Count('posts'))\
+                   .order_by('-posts_count')
 
 
 class Post(models.Model):
@@ -76,7 +88,7 @@ class Tag(models.Model):
         self.title = self.title.lower()
 
     def get_absolute_url(self):
-        return reverse('tag_filter', args={'tag_title': self.slug})
+        return reverse('tag_filter', args={'tag_title': self.title})
 
     class Meta:
         ordering = ['title']
