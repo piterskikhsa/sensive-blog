@@ -1,0 +1,3 @@
+[flake8]
+exclude = .git,__pycache__,docs/source/conf.py,old,build,dist,env
+inline-quotes = ' # Указываем, какой тип кавычек должен использоваться в вашем проекте
